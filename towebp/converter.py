@@ -7,64 +7,95 @@ from rich.progress import track
 
 from .utils import (
     is_supported_image,
-    create_output_path
+    get_output_path_for_file,
+    get_output_path_for_directory
 )
 
 console = Console()
 
 
 def collect_images(
-    directory,
-    recursive
+    directory
 ):
 
     files_found = []
 
-    if recursive:
+    for root, _, files in os.walk(directory):
 
-        for root, _, files in os.walk(directory):
-
-            for file in files:
-
-                if is_supported_image(file):
-
-                    files_found.append(
-                        (root, file)
-                    )
-
-    else:
-
-        for file in os.listdir(directory):
+        for file in files:
 
             if is_supported_image(file):
 
                 files_found.append(
-                    (directory, file)
+                    (root, file)
                 )
 
     return files_found
 
 
-def convert_images(
-    directory,
-    recursive=False,
-    output_dir="webp",
+def convert_file(
+    filepath,
     quality=80,
+    output_dir=None,
     overwrite=False,
-    skip_existing=True
 ):
 
-    images = collect_images(
-        directory,
-        recursive
+    filename = os.path.basename(filepath)
+    root = os.path.dirname(filepath)
+
+    if not is_supported_image(filename):
+        console.print(
+            f"[red]Error:[/red] Unsupported format: {filename}"
+        )
+        return
+
+    output_path = get_output_path_for_file(
+        root,
+        filename,
+        output_dir
     )
 
-    if not images:
+    if os.path.exists(output_path) and not overwrite:
+        console.print(
+            f"[yellow]Skipped:[/yellow] {filename} (already exists)"
+        )
+        return
 
+    try:
+
+        with Image.open(filepath) as img:
+
+            img.save(
+                output_path,
+                "WEBP",
+                quality=quality
+            )
+
+        console.print(
+            f"[green]Converted:[/green] {filename} -> {os.path.basename(output_path)}"
+        )
+
+    except Exception as e:
+
+        console.print(
+            f"[red]Error:[/red] {filename} -> {e}"
+        )
+
+
+def convert_directory(
+    directory,
+    quality=80,
+    output_dir=None,
+    same_dir=False,
+    overwrite=False,
+):
+
+    images = collect_images(directory)
+
+    if not images:
         console.print(
             "[yellow]No compatible images found[/yellow]"
         )
-
         return
 
     console.print(
@@ -85,19 +116,15 @@ def convert_images(
             file
         )
 
-        output_path = create_output_path(
+        output_path = get_output_path_for_directory(
             root,
             file,
-            output_dir
+            directory,
+            output_dir,
+            same_dir
         )
 
-        # Saltar si ya existe
-        if (
-            os.path.exists(output_path)
-            and skip_existing
-            and not overwrite
-        ):
-
+        if os.path.exists(output_path) and not overwrite:
             skipped += 1
             continue
 

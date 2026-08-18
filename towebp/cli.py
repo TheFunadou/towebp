@@ -6,7 +6,7 @@ from rich.console import Console
 from rich_argparse import RichHelpFormatter
 
 from .banner import show_banner
-from .converter import convert_images
+from .converter import convert_file, convert_directory
 
 console = Console()
 
@@ -19,82 +19,62 @@ def build_english_parser():
     parser = argparse.ArgumentParser(
         prog="towebp",
         formatter_class=RichHelpFormatter,
-        usage="towebp [OPTIONS]",
+        usage="towebp <target> [OPTIONS]",
         description="""
 Professional image to WEBP converter.
 
-BASIC USAGE:
-  Convert images in the current directory:
-    towebp
-
-  Convert images in another directory:
-    towebp -d ./images
-
-  Convert images recursively:
-    towebp -d ./assets -r
-
-  Save WEBP images in the same folder:
-    towebp -o .
-
-  Change WEBP quality:
-    towebp -q 90
-
-FLAG COMBINATIONS:
-  Convert recursively and save in the same folder:
-    towebp -d ./assets -r -o .
-
-  Convert recursively with custom quality:
-    towebp -d ./assets -r -q 95
-
-  Convert recursively, save in the same folder, and overwrite existing WEBP files:
-    towebp -d ./assets -r -o . --overwrite
-
-DEFAULT VALUES:
-  Directory:              . (Current directory)
-  Output directory:       webp (Subdirectory)
-  WEBP quality:           80 (0-100)
-  Recursive search:       Disabled
-  Overwrite existing:     Disabled
+Convert a single file or an entire directory to WEBP format.
+Directories are searched recursively by default.
 """,
         epilog="""
-SUPPORTED FORMATS:
-  • PNG, JPG, JPEG
+EXAMPLES:
 
-NOTES:
-  • By default, WEBP files are saved in a 'webp' folder.
-  • Use '-o .' to save WEBP files next to the original images.
-  • Existing WEBP files are skipped unless '--overwrite' is used.
+  Single file:
+    towebp photo.png                    Convert to photo.webp in same folder
+    towebp photo.png -q 90              Convert with quality 90
+    towebp photo.png -outdir /tmp       Save to /tmp/photo.webp
+
+  Directory (recursive by default):
+    towebp ./images                     Convert all -> ./images/webp/
+    towebp ./images --same-dir          Convert all -> next to originals
+    towebp ./images -outdir /tmp        Convert all -> /tmp/
+    towebp ./images -q 90 --overwrite   Quality 90, overwrite existing
+
+DEFAULT BEHAVIOR:
+  File:      Output in same directory as source
+  Directory: Output in <directory>/webp/ subfolder (recursive)
+
+SUPPORTED FORMATS: PNG, JPG, JPEG
 
 TOWEBP by theFunadou
 """
     )
 
-    # DIRECTORY OPTIONS
-    directory_group = parser.add_argument_group("DIRECTORY OPTIONS")
-    
-    directory_group.add_argument(
-        "-d", "--directory",
-        default=".",
-        metavar="PATH",
-        help="Root directory to search for images (default: '.')."
+    parser.add_argument(
+        "target",
+        metavar="TARGET",
+        help="File or directory to convert."
     )
-    
-    directory_group.add_argument(
-        "-r", "--recursive",
-        action="store_true",
-        help="Search images recursively through all subdirectories."
-    )
-    
-    directory_group.add_argument(
-        "-o", "--output-dir",
-        default="webp",
+
+    # OUTPUT OPTIONS
+    output_group = parser.add_argument_group("OUTPUT OPTIONS")
+
+    output_group.add_argument(
+        "-outdir", "--output-dir",
+        default=None,
         metavar="DIR",
-        help="Output directory name (default: 'webp'). Use '.' to save next to original images."
+        help="Custom output directory (created if it doesn't exist)."
+    )
+
+    output_group.add_argument(
+        "--same-dir",
+        action="store_true",
+        help="Save output next to original files."
     )
 
     # CONVERSION OPTIONS
     conversion_group = parser.add_argument_group("CONVERSION OPTIONS")
-    
+
     conversion_group.add_argument(
         "-q", "--quality",
         type=int,
@@ -102,18 +82,11 @@ TOWEBP by theFunadou
         metavar="0-100",
         help="WEBP image quality (default: 80)."
     )
-    
+
     conversion_group.add_argument(
         "--overwrite",
         action="store_true",
         help="Overwrite existing WEBP files."
-    )
-    
-    conversion_group.add_argument(
-        "--skip-existing",
-        action="store_true",
-        default=True,
-        help="Skip already converted images (default: True)."
     )
 
     return parser
@@ -127,82 +100,62 @@ def build_spanish_parser():
     parser = argparse.ArgumentParser(
         prog="towebp",
         formatter_class=RichHelpFormatter,
-        usage="towebp [OPCIONES]",
+        usage="towebp <objetivo> [OPCIONES]",
         description="""
 Conversor profesional de imágenes a WEBP.
 
-USO BÁSICO:
-  Convertir imágenes en el directorio actual:
-    towebp
-
-  Convertir imágenes en otro directorio:
-    towebp -d ./imagenes
-
-  Convertir imágenes recursivamente:
-    towebp -d ./assets -r
-
-  Guardar imágenes WEBP en la misma carpeta:
-    towebp -o .
-
-  Cambiar calidad WEBP:
-    towebp -q 90
-
-COMBINACIÓN DE FLAGS:
-  Convertir recursivamente y guardar en la misma carpeta:
-    towebp -d ./assets -r -o .
-
-  Convertir recursivamente con calidad personalizada:
-    towebp -d ./assets -r -q 95
-
-  Convertir recursivamente, guardar en la misma carpeta y sobrescribir WEBP existentes:
-    towebp -d ./assets -r -o . --overwrite
-
-VALORES PREDETERMINADOS:
-  Directorio:             . (Directorio actual)
-  Directorio de salida:   webp (Subdirectorio)
-  Calidad WEBP:           80 (0-100)
-  Búsqueda recursiva:     Deshabilitada
-  Sobrescribir existente: Deshabilitado
+Convierte un archivo individual o un directorio completo a formato WEBP.
+Los directorios se buscan recursivamente por defecto.
 """,
         epilog="""
-FORMATOS SOPORTADOS:
-  • PNG, JPG, JPEG
+EJEMPLOS:
 
-NOTAS:
-  • Por defecto, las imágenes WEBP se guardan en la carpeta 'webp'.
-  • Usa '-o .' para guardar las imágenes WEBP junto a las originales.
-  • Las imágenes WEBP existentes se omiten a menos que uses '--overwrite'.
+  Archivo individual:
+    towebp foto.png                     Convertir a foto.webp en la misma carpeta
+    towebp foto.png -q 90               Convertir con calidad 90
+    towebp foto.png -outdir /tmp        Guardar en /tmp/foto.webp
+
+  Directorio (recursivo por defecto):
+    towebp ./imagenes                   Convertir todo -> ./imagenes/webp/
+    towebp ./imagenes --same-dir        Convertir todo -> junto a los originales
+    towebp ./imagenes -outdir /tmp      Convertir todo -> /tmp/
+    towebp ./imagenes -q 90 --overwrite Calidad 90, sobrescribir existentes
+
+COMPORTAMIENTO POR DEFECTO:
+  Archivo:      Output en la misma carpeta del archivo original
+  Directorio:   Output en subcarpeta <directorio>/webp/ (recursivo)
+
+FORMATOS SOPORTADOS: PNG, JPG, JPEG
 
 TOWEBP por theFunadou
 """
     )
 
-    # OPCIONES DE DIRECTORIO
-    directory_group = parser.add_argument_group("OPCIONES DE DIRECTORIO")
-    
-    directory_group.add_argument(
-        "-d", "--directory",
-        default=".",
-        metavar="RUTA",
-        help="Directorio raíz para buscar imágenes (por defecto: '.')."
+    parser.add_argument(
+        "target",
+        metavar="OBJETIVO",
+        help="Archivo o directorio a convertir."
     )
-    
-    directory_group.add_argument(
-        "-r", "--recursive",
-        action="store_true",
-        help="Buscar imágenes recursivamente en todos los subdirectorios."
-    )
-    
-    directory_group.add_argument(
-        "-o", "--output-dir",
-        default="webp",
+
+    # OPCIONES DE SALIDA
+    output_group = parser.add_argument_group("OPCIONES DE SALIDA")
+
+    output_group.add_argument(
+        "-outdir", "--output-dir",
+        default=None,
         metavar="DIR",
-        help="Nombre del directorio de salida (por defecto: 'webp'). Usa '.' para guardar junto a las originales."
+        help="Directorio de salida personalizado (se crea si no existe)."
+    )
+
+    output_group.add_argument(
+        "--same-dir",
+        action="store_true",
+        help="Guardar junto a los archivos originales."
     )
 
     # OPCIONES DE CONVERSIÓN
     conversion_group = parser.add_argument_group("OPCIONES DE CONVERSIÓN")
-    
+
     conversion_group.add_argument(
         "-q", "--quality",
         type=int,
@@ -210,18 +163,11 @@ TOWEBP por theFunadou
         metavar="0-100",
         help="Calidad de la imagen WEBP (por defecto: 80)."
     )
-    
+
     conversion_group.add_argument(
         "--overwrite",
         action="store_true",
-        help="Sobrescribir los archivos WEBP existentes."
-    )
-    
-    conversion_group.add_argument(
-        "--skip-existing",
-        action="store_true",
-        default=True,
-        help="Omitir imágenes ya convertidas (por defecto: True)."
+        help="Sobrescribir archivos WEBP existentes."
     )
 
     return parser
@@ -232,47 +178,35 @@ TOWEBP por theFunadou
 # ==========================================================
 
 def main():
-    # ==========================================================
-    # WELCOME SCREEN
-    # ==========================================================
     if len(sys.argv) == 1:
         show_banner()
 
         console.print("[bold white]Quick Start Examples:[/bold white]\n")
-        console.print("  [cyan]towebp[/cyan]                            Convert images in current directory to 'webp/'")
-        console.print("  [cyan]towebp -d ./images[/cyan]                 Convert images in './images' to './images/webp/'")
-        console.print("  [cyan]towebp -d ./assets -r[/cyan]              Convert images recursively in './assets'")
-        console.print("  [cyan]towebp -d ./assets -r -o . -q 90[/cyan]   Convert recursively, save next to originals, quality 90")
+        console.print("  [cyan]towebp photo.png[/cyan]                     Convert file to photo.webp")
+        console.print("  [cyan]towebp ./images[/cyan]                     Convert directory to ./images/webp/")
+        console.print("  [cyan]towebp ./images --same-dir[/cyan]          Convert next to originals")
+        console.print("  [cyan]towebp ./images -q 90 --overwrite[/cyan]  Quality 90, overwrite existing\n")
 
-        console.print("\n[bold white]Help Options:[/bold white]\n")
-        console.print("  [green]towebp --help[/green]                      Show this help message in English")
-        console.print("  [green]towebp --help-s[/green]                    Show this help message in Spanish")
+        console.print("[bold white]Help Options:[/bold white]\n")
+        console.print("  [green]towebp --help[/green]                      Show help in English")
+        console.print("  [green]towebp --help-s[/green]                    Show help in Spanish")
         console.print("  [green]towebp --hs[/green]                        Alias for --help-s")
         return
 
-    # ==========================================================
-    # SPANISH HELP
-    # ==========================================================
     if "--help-s" in sys.argv or "--hs" in sys.argv:
         parser = build_spanish_parser()
         parser.print_help()
         return
 
-    # ==========================================================
-    # ENGLISH HELP / NORMAL EXECUTION
-    # ==========================================================
     parser = build_english_parser()
     args = parser.parse_args()
 
-    directory = os.path.abspath(args.directory)
+    target = os.path.abspath(args.target)
 
-    # ==========================================================
-    # VALIDATIONS
-    # ==========================================================
-    if not os.path.isdir(directory):
+    if not os.path.exists(target):
         console.print(
             "\n[bold red]Error:[/bold red] "
-            "The specified directory does not exist.\n"
+            f"Target does not exist: {target}\n"
         )
         return
 
@@ -283,26 +217,52 @@ def main():
         )
         return
 
-    # ==========================================================
-    # START
-    # ==========================================================
+    if args.same_dir and args.output_dir:
+        console.print(
+            "\n[bold red]Error:[/bold red] "
+            "Cannot use --same-dir and -outdir together.\n"
+        )
+        return
+
     show_banner()
 
-    console.print("[bold green]Current Configuration[/bold green]\n")
-    console.print(f"[cyan]Directory:[/cyan]      {directory}")
-    console.print(f"[cyan]Recursive:[/cyan]     {args.recursive}")
-    console.print(f"[cyan]Output:[/cyan]        {args.output_dir}")
-    console.print(f"[cyan]Quality:[/cyan]      {args.quality}")
-    console.print(f"[cyan]Overwrite:[/cyan]    {args.overwrite}\n")
+    console.print("[bold green]Configuration[/bold green]\n")
+    console.print(f"[cyan]Target:[/cyan]       {target}")
+    console.print(f"[cyan]Quality:[/cyan]     {args.quality}")
 
-    convert_images(
-        directory=directory,
-        recursive=args.recursive,
-        output_dir=args.output_dir,
-        quality=args.quality,
-        overwrite=args.overwrite,
-        skip_existing=args.skip_existing
-    )
+    if os.path.isfile(target):
+        console.print(f"[cyan]Type:[/cyan]        File")
+        if args.output_dir:
+            console.print(f"[cyan]Output:[/cyan]      {args.output_dir}")
+        elif args.same_dir:
+            console.print(f"[cyan]Output:[/cyan]      Same directory")
+        else:
+            console.print(f"[cyan]Output:[/cyan]      Same directory")
+        console.print(f"[cyan]Overwrite:[/cyan]   {args.overwrite}\n")
+
+        convert_file(
+            filepath=target,
+            quality=args.quality,
+            output_dir=args.output_dir,
+            overwrite=args.overwrite,
+        )
+    else:
+        console.print(f"[cyan]Type:[/cyan]        Directory (recursive)")
+        if args.output_dir:
+            console.print(f"[cyan]Output:[/cyan]      {args.output_dir}")
+        elif args.same_dir:
+            console.print(f"[cyan]Output:[/cyan]      Same as originals")
+        else:
+            console.print(f"[cyan]Output:[/cyan]      {target}/webp/")
+        console.print(f"[cyan]Overwrite:[/cyan]   {args.overwrite}\n")
+
+        convert_directory(
+            directory=target,
+            quality=args.quality,
+            output_dir=args.output_dir,
+            same_dir=args.same_dir,
+            overwrite=args.overwrite,
+        )
 
 
 if __name__ == "__main__":
